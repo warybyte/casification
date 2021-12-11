@@ -1,0 +1,86 @@
+images vs. containers
+
+Images are what the container feeds off.
+Multiple containers can be made from an image.
+Image is like a class. Container is like an instance of that class.
+
+docker images   # view pulled images
+docker ps -a    # view running containers
+docker rmi <1>  # delete image (by id or name)
+docker rm <2>   # delete container (by id or name)
+
+# run a container off an image (interactive with shell)
+docker run -i -t fb52e22af1b0 /bin/bash
+
+# start an already created container (non-interactive)
+docker start 5091052f824a
+
+# pull image -> generate container -> write container changes to image
+sudo docker commit <CONTAINER_ID> ubuntu-092021-updates
+
+docker start <id>  }_ These don't happen at the same time
+docker attach <id> }
+
+Docker Env
+- Cent8 Stream on VM
+--- bridge network adapter
+--- install git, java-11, docker-ce, 
+--- disable firewalld
+# Git pull apereo crap
+--- chmod +x *.sh
+# build it!
+./docker-build.sh
+# this is going to break...you have to make files and copy over
+--- cp -r etc/cas/config /etc/cas/
+--- mkdir etc/cas/services; cp etc/cas/services /etc/cas
+--- mkdir etc/cas/saml; cp etc/cas/saml /etc/cas
+# run it!
+./docker-run.sh
+
+# Oh yeah, this is going to break too because you're missing your keystore...
+
+--- cd etc/cas/
+
+# if you have a key, do this
+--- openssl pkcs12 -export -in sso.warybyte.com.crt -inkey ../private/sso.warybyte.com.key -out sso.warybyte.com.p12
+
+# if not, self sign it like this
+--- keytool -genkey -keyalg RSA -alias thekeystore -keystore thekeystore -storepass changeit -validity 360 -keysize 2048
+
+# import whichever into your Java keystore
+--- sudo keytool -importkeystore -srckeystore thekeystore -destkeystore "/usr/lib/jvm/java-11-openjdk-11.0.13.0.8-3.el8_5.x86_64/lib/security/cacerts"
+
+OR (for your own)
+
+--- [xiphos@sso ~]$ sudo keytool -importkeystore -srckeystore sso.warybyte.com.p12 -srcstoretype pkcs12 -destkeystore "/usr/lib/jvm/java-11-openjdk-11.0.13.0.8-3.el8_5.x86_64/lib/security/cacerts"
+[sudo] password for xiphos: 
+Importing keystore sso.warybyte.com.p12 to /usr/lib/jvm/java-11-openjdk-11.0.13.0.8-3.el8_5.x86_64/lib/security/cacerts...
+Enter destination keystore password:  
+Enter source keystore password:  
+Entry for alias 1 successfully imported.
+Import command completed:  1 entries successfully imported, 0 entries failed or cancelled
+
+
+# Made a mistake? Change alias or deleting imports in CACerts is possible
+sudo keytool -changealias -alias "oldalias" -destalias "thekeystore" -cacerts
+# This also is going to fail even though you have keystore in overlay/etc/cas 
+# AND /etc/cas/. Why?? REBUILD!
+--- ./docker-build.sh
+--- ./docker-run.sh
+# Woooh! You now have a generic CAS instance running in docker.
+# Want to see inside?
+--- docker run -it --entrypoint /bin/sh a37daf24bc3f (if it hasn't started)
+--- docker exec -it 22f79f6db6d6 /bin/sh (if it's started) 
+# Why no Bash? Your Springboots images have /bin/sh by default, not /bin/bash
+# https://spring.io/guides/topicals/spring-boot-docker/
+ 
+# You'll find the .war and the basic FS all running under root
+
+# Add json service
+--- vi build.gradle
+--- implementation "org.apereo.cas:cas-server-support-json-service-registry"
+--- vi cas.configuration
+--- cas.service-registry.json.location: file:/etc/cas/services
+--- cas.service-registry.core.init-from-json: true
+
+
